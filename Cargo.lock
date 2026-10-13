@@ -779,10 +779,12 @@ name = "cuber-launcher"
 version = "0.1.0"
 dependencies = [
  "cuber-core",
+ "cuber-launch",
  "serde",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "tokio",
  "tracing",
 ]
 

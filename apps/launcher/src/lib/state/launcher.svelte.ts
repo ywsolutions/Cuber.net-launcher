@@ -24,7 +24,18 @@ export class LauncherState {
 
   launching = $state(false);
   launchProgress = $state(0);
-  playText = $state(PLAY_IDLE);
+  launchLabel = $state("");
+  /** Профили, игра которых сейчас запущена. */
+  running = $state<string[]>([]);
+  /** Ошибка последнего запуска — показывается над панелью. */
+  launchError = $state<string | null>(null);
+
+  selectedRunning = $derived(
+    this.selectedProfile ? this.running.includes(this.selectedProfile.id) : false,
+  );
+  playText = $derived(
+    this.launching ? this.launchLabel || "Запуск" : this.selectedRunning ? "В игре" : PLAY_IDLE,
+  );
 
   nickname = $derived(this.config?.last_nickname || DEFAULT_NICKNAME);
   memoryGb = $derived(
@@ -43,6 +54,12 @@ export class LauncherState {
     this.services = createServices(() => this.nickname);
     this.party = new PartyState(this.services.party);
     this.friends = new FriendsState(this.services.friends, this.services.party, this.party);
+    this.services.launcher.onExit((id, crashed) => {
+      this.running = this.running.filter((r) => r !== id);
+      if (crashed) {
+        this.launchError = "Игра закрылась с ошибкой. Подробности — в папке профиля, logs/latest.log.";
+      }
+    });
   }
 
   async init() {
@@ -60,7 +77,24 @@ export class LauncherState {
       await this.friends.load();
     } catch (e) {
       this.error = String(e);
+      return;
     }
+    // Первый запуск: сразу готовим профиль с последней версией, чтобы можно было играть.
+    if (this.profiles.length === 0) {
+      try {
+        const { latest } = await this.services.profiles.versions();
+        await this.createProfile(`Minecraft ${latest}`, latest);
+      } catch {
+        // Нет сети — пользователь создаст профиль сам, когда она появится.
+      }
+    }
+  }
+
+  async createProfile(name: string, version: string) {
+    const profile = await this.services.profiles.create(name, version);
+    this.profiles = [profile, ...this.profiles];
+    this.selectedProfile = profile;
+    return profile;
   }
 
   togglePanel(panel: Exclude<Panel, "none">) {
@@ -105,25 +139,27 @@ export class LauncherState {
 
   async play() {
     const profile = this.selectedProfile;
-    if (!profile || this.launching) return;
+    if (!profile || this.launching || this.selectedRunning) return;
 
     this.launching = true;
+    this.launchError = null;
     this.profileMenuOpen = false;
-    this.playText = "Запуск 0%";
+    this.launchProgress = 0;
+    this.launchLabel = "Подготовка";
     try {
-      await this.services.launcher.launch(profile, this.memoryGb, (p) => {
-        this.launchProgress = p;
-        this.playText = `Запуск ${Math.round(p * 100)}%`;
+      await this.services.launcher.launch(profile, (p) => {
+        this.launchProgress = p.fraction;
+        this.launchLabel = p.label;
       });
-      this.playText = "В игре";
-      await new Promise((r) => setTimeout(r, 2500));
-    } catch {
-      this.playText = "Ошибка";
-      await new Promise((r) => setTimeout(r, 2000));
+      this.running = [...this.running, profile.id];
+      // Недавно запущенный профиль — первым в списке.
+      this.profiles = [profile, ...this.profiles.filter((p) => p.id !== profile.id)];
+    } catch (e) {
+      this.launchError = String(e);
     } finally {
       this.launching = false;
       this.launchProgress = 0;
-      this.playText = PLAY_IDLE;
+      this.launchLabel = "";
     }
   }
 }

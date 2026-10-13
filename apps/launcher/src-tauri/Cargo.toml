@@ -12,7 +12,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 cuber-core.workspace = true
+cuber-launch.workspace = true
 serde.workspace = true
 tracing.workspace = true
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
+tokio.workspace = true

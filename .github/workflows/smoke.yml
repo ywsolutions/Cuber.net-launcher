@@ -18,6 +18,10 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   linux:
     name: Linux · ${{ matrix.version }}
@@ -35,7 +39,8 @@ jobs:
       - name: Виртуальный дисплей и программный OpenGL
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils imagemagick libopenal1 x11-utils
+          # x11-xserver-utils — утилита xrandr, без которой LWJGL 2 (1.8–1.12) падает на Linux.
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-utils imagemagick libopenal1 x11-utils x11-xserver-utils
       - name: Сборка cuber-cli
         run: cargo build -p cuber-cli
       - name: Установка и запуск ${{ matrix.version }}
@@ -98,3 +103,43 @@ jobs:
           path: |
             out/
             home/cli-logs/
+
+  report:
+    name: Отчёт в PR
+    needs: [linux, desktop]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: results
+      - name: Собрать отчёт
+        run: |
+          {
+            echo "### Smoke — настоящий Minecraft"
+            echo
+            echo "| Проверка | Результат |"
+            echo "|---|---|"
+            for d in results/*/; do
+              n=$(basename "$d")
+              if grep -q "ПРОВЕРКА ПРОЙДЕНА" "$d"/cli.log "$d"/out/cli.log 2>/dev/null; then r="✅"; else r="❌"; fi
+              echo "| $n | $r |"
+            done
+            echo
+            for d in results/*/; do
+              n=$(basename "$d")
+              f=$(ls "$d"/cli.log "$d"/out/cli.log 2>/dev/null | head -1)
+              [ -n "$f" ] || continue
+              echo "<details><summary>$n — конец вывода</summary>"
+              echo
+              echo '```'
+              grep -v "^  загрузка:" "$f" | grep -v "^Запуск: " | tail -n 45 | cut -c1-300
+              echo '```'
+              echo "</details>"
+            done
+          } > report.md
+          wc -c report.md
+      - name: Комментарий
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file report.md

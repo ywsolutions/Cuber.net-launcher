@@ -3,6 +3,7 @@
 // используются заглушки — так удобно верстать без пересборки Rust.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type Theme = "system" | "dark" | "light";
@@ -51,6 +52,48 @@ export async function saveConfig(config: Config): Promise<Config> {
 export async function openDataDir(): Promise<void> {
   if (!inTauri) return;
   return invoke("open_data_dir");
+}
+
+// ── Профили и запуск ────────────────────────────────────────────────
+
+export interface ProfileDto {
+  id: string;
+  name: string;
+  version: string;
+  loader: string;
+}
+
+export interface VersionsDto {
+  latest: string;
+  versions: { id: string; kind: string }[];
+}
+
+export type LaunchStage = "resolving" | "java" | "checking" | "downloading" | "unpacking" | "launching";
+
+export interface LaunchProgressEvent {
+  profileId: string;
+  stage: LaunchStage;
+  fraction: number;
+  done: number;
+  total: number;
+}
+
+export interface GameExitedEvent {
+  profileId: string;
+  code: number | null;
+  crashed: boolean;
+}
+
+export const listProfiles = () => invoke<ProfileDto[]>("list_profiles");
+export const createProfile = (name: string, version: string) =>
+  invoke<ProfileDto>("create_profile", { profile: { name, version } });
+export const listVersions = (snapshots = false) =>
+  invoke<VersionsDto>("list_versions", { snapshots });
+export const launchProfile = (id: string) => invoke<void>("launch_profile", { id });
+export const openProfileDir = (id: string) => invoke<void>("open_profile_dir", { id });
+
+export function onEvent<T>(name: string, handler: (payload: T) => void): Promise<UnlistenFn> {
+  return listen<T>(name, (e) => handler(e.payload));
 }
 
 // ── Окно ────────────────────────────────────────────────────────────
