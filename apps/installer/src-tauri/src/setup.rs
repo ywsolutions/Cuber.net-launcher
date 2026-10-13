@@ -216,8 +216,12 @@ mod win {
             "ping -n 3 127.0.0.1 >NUL & rmdir /S /Q \"{}\"",
             dir.display()
         );
+        // raw_arg: cmd не понимает экранирование кавычек, которое делает Rust для
+        // обычных аргументов, — путь с пробелами превратился бы в мусор.
         std::process::Command::new("cmd")
-            .args(["/C", &script])
+            .arg("/C")
+            .raw_arg(&script)
+            .current_dir(std::env::temp_dir())
             .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
             .spawn()
             .map_err(|e| err("очистка папки", e))?;

@@ -97,8 +97,11 @@ jobs:
             Start-Sleep -Seconds 1
             $proc = Get-Process -Id $app.Id -ErrorAction SilentlyContinue
             if (-not $proc) { break }
+            # Считаем с момента, когда интерфейс готов (в отчёте появилась строка start):
+            # первые секунды WebView2 на холодной машине CI ещё создаётся.
+            if (-not ((Test-Path $log) -and (Select-String -Path $log -Pattern "^start" -Quiet))) { continue }
             $proc.Refresh(); $checks++
-            if (-not $proc.Responding) { $hung++ }
+            if (-not $proc.Responding) { $hung++; $report.Add("   (не отвечал на $i-й секунде)") }
             if ((Test-Path $log) -and (Select-String -Path $log -Pattern "^DONE" -Quiet)) { break }
           }
           $alive = $null -ne (Get-Process -Id $app.Id -ErrorAction SilentlyContinue)
