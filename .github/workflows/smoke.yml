@@ -8,6 +8,7 @@ name: Smoke — настоящий Minecraft
 on:
   push:
     branches: ["stage-*"]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
