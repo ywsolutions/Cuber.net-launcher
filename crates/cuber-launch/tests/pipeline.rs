@@ -211,8 +211,17 @@ async fn install_and_launch_fake_version() {
         !out.contains("${"),
         "остались неподставленные переменные: {out}"
     );
-    let cwd = std::fs::canonicalize(&game_dir).unwrap();
-    assert!(out.contains(&format!("CWD {}", cwd.display())), "{out}");
+    // Игра запущена в папке игры профиля. Сравниваем хвост пути: на Windows
+    // канонический путь бывает с префиксом \\?\ и в другом регистре.
+    let cwd_line = out
+        .lines()
+        .find_map(|l| l.strip_prefix("CWD "))
+        .expect("нет строки CWD")
+        .replace('\\', "/");
+    assert!(
+        cwd_line.ends_with(&format!("profiles/{}/minecraft", profile.id)),
+        "{cwd_line}"
+    );
 
     // Второй профиль на той же версии: ничего не качается заново.
     let before = server.state.lock().unwrap().log.len();
