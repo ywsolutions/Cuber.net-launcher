@@ -6,6 +6,7 @@
   import PartyPanel from "./lib/panels/PartyPanel.svelte";
   import SettingsPanel from "./lib/panels/SettingsPanel.svelte";
   import { LauncherState } from "./lib/state/launcher.svelte";
+  import Icon from "./lib/ui/Icon.svelte";
   import Reveal from "./lib/ui/Reveal.svelte";
 
   const app = new LauncherState();
@@ -60,6 +61,7 @@
       app.party.members.length,
       app.friends.requests.length,
       app.friends.notice,
+      app.launchError,
     ];
     grow();
     settleSoon();
@@ -104,6 +106,16 @@
       <Reveal open={app.panel === "settings"} bleed>
         <SettingsPanel {app} onClose={() => app.closePanels()} />
       </Reveal>
+
+      <!-- Ошибка запуска: над основной панелью, закрывается крестиком. -->
+      <Reveal open={!!app.launchError} bleed>
+        <div class="card launch-error" role="alert">
+          <span class="msg">{app.launchError}</span>
+          <button class="icon-btn" title="Скрыть" onclick={() => (app.launchError = null)}>
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      </Reveal>
     {/if}
 
     <MainBar {app} bind:popup />
@@ -121,6 +133,24 @@
   /* Поля — место под тени карточек. */
   .stack {
     margin: 0 16px 22px;
+  }
+
+  .launch-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 8px 10px 14px;
+    margin-bottom: 8px;
+    border-color: rgba(248, 113, 113, 0.35);
+  }
+
+  .launch-error .msg {
+    flex: 1;
+    padding-top: 4px;
+    font-size: 12px;
+    color: var(--red);
+    user-select: text;
+    word-break: break-word;
   }
 
   .error {

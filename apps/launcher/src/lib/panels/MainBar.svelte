@@ -3,6 +3,7 @@
   import type { LauncherState } from "../state/launcher.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import Icon from "../ui/Icon.svelte";
+  import ProfileMenu from "./ProfileMenu.svelte";
 
   let { app, popup = $bindable() }: { app: LauncherState; popup?: HTMLElement } = $props();
 
@@ -48,19 +49,7 @@
 
     {#if app.profileMenuOpen}
       <div class="card popup" bind:this={popup}>
-        <div class="section-label">Профили</div>
-        {#each app.profiles as p (p.id)}
-          <button class="list-btn" onclick={() => app.selectProfile(p)}>
-            <Avatar name={app.nickname} size={28} radius={7} />
-            <span class="meta">
-              <span class="pname small">{p.name}</span>
-              <span class="sub">{p.version} · {p.loader}</span>
-            </span>
-            <span class="check" class:visible={p.id === profile?.id}>
-              <Icon name="check" size={13} stroke={2.4} />
-            </span>
-          </button>
-        {/each}
+        <ProfileMenu {app} />
       </div>
     {/if}
   </div>
@@ -90,8 +79,13 @@
   </button>
 
   <!-- Играть -->
-  <button class="play" disabled={app.launching || !profile} onclick={() => app.play()}>
-    {#if !app.launching}<Icon name="play" size={13} />{/if}
+  <button
+    class="play"
+    disabled={app.launching || app.selectedRunning || !profile}
+    title={profile ? undefined : "Сначала создайте профиль"}
+    onclick={() => app.play()}
+  >
+    {#if !app.launching && !app.selectedRunning}<Icon name="play" size={13} />{/if}
     <span>{app.playText}</span>
     {#if app.launching}
       <span class="progress"><span style:transform="scaleX({app.launchProgress})"></span></span>
@@ -160,10 +154,6 @@
     text-overflow: ellipsis;
   }
 
-  .pname.small {
-    font-size: 12.5px;
-    font-weight: 500;
-  }
 
   .profile .dim {
     margin-right: 4px;
@@ -179,9 +169,6 @@
     animation: fade 140ms ease;
   }
 
-  .popup .section-label {
-    margin: 4px 0 4px 8px;
-  }
 
   @keyframes fade {
     from {
@@ -190,33 +177,10 @@
     }
   }
 
-  .list-btn {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    padding: 6px;
-    border-radius: 9px;
-    text-align: left;
-    transition: background 120ms;
-  }
 
-  .list-btn:hover {
-    background: var(--hover);
-  }
 
-  .list-btn .meta {
-    margin-right: 0;
-  }
 
-  .check {
-    margin-right: 4px;
-    color: var(--accent);
-    visibility: hidden;
-  }
 
-  .check.visible {
-    visibility: visible;
-  }
 
   .chip {
     position: relative;
