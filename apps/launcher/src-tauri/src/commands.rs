@@ -52,3 +52,25 @@ pub fn open_data_dir(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdRe
         .open_path(state.paths.root().display().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
 }
+
+/// Подгоняет высоту окна под содержимое (нижний край остаётся на месте)
+/// и при `show = true` показывает окно, если оно ещё скрыто.
+#[tauri::command]
+pub fn fit_window(window: tauri::WebviewWindow, height: f64, show: bool) -> CmdResult<()> {
+    crate::window::fit_height(&window, height).map_err(|e| e.to_string())?;
+    if show && !window.is_visible().unwrap_or(true) {
+        window.show().map_err(|e| e.to_string())?;
+        crate::window::mark_shown();
+        // После показа — ещё раз на место: оконный менеджер мог сдвинуть окно.
+        let _ = crate::window::reapply(&window);
+        let _ = window.set_focus();
+    }
+    Ok(())
+}
+
+/// Возвращает окну рассчитанные размер и позицию. Вызывается вскоре после
+/// первого показа: часть систем в момент показа сбрасывает размер или сдвигает окно.
+#[tauri::command]
+pub fn restore_window(window: tauri::WebviewWindow) -> CmdResult<()> {
+    crate::window::reapply(&window).map_err(|e| e.to_string())
+}

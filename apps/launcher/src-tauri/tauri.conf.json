@@ -13,17 +13,22 @@
     "windows": [
       {
         "label": "main",
-        "title": "Cuber",
-        "width": 1000,
-        "height": 640,
-        "minWidth": 820,
-        "minHeight": 520,
-        "center": true
+        "title": "Cuber.net",
+        "width": 520,
+        "height": 760,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "visible": false,
+        "center": false
       }
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' data: asset: https:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

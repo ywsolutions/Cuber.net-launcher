@@ -1,65 +1,131 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { appInfo, applyTheme, getConfig, type AppInfo, type Config } from "./lib/api";
-  import Sidebar, { type Page } from "./lib/Sidebar.svelte";
-  import PlayPage from "./lib/pages/PlayPage.svelte";
-  import ContentPage from "./lib/pages/ContentPage.svelte";
-  import FriendsPage from "./lib/pages/FriendsPage.svelte";
-  import SettingsPage from "./lib/pages/SettingsPage.svelte";
+  import { fitWindow, restoreWindow } from "./lib/api";
+  import FriendsPanel from "./lib/panels/FriendsPanel.svelte";
+  import MainBar from "./lib/panels/MainBar.svelte";
+  import PartyPanel from "./lib/panels/PartyPanel.svelte";
+  import SettingsPanel from "./lib/panels/SettingsPanel.svelte";
+  import { LauncherState } from "./lib/state/launcher.svelte";
+  import Reveal from "./lib/ui/Reveal.svelte";
 
-  let page = $state<Page>("play");
-  let config = $state<Config | null>(null);
-  let info = $state<AppInfo | null>(null);
-  let error = $state<string | null>(null);
+  const app = new LauncherState();
 
-  onMount(async () => {
-    try {
-      [config, info] = await Promise.all([getConfig(), appInfo()]);
-      applyTheme(config.theme);
-    } catch (e) {
-      error = String(e);
-    }
+  // ── Окно «растёт вверх» ──────────────────────────────────────────
+  // Весь интерфейс прижат к низу. Перед раскрытием чего-либо окно сразу
+  // вырастает до максимума (чтобы анимации было куда расти), а когда всё
+  // успокоилось — ужимается ровно по содержимому.
+  const MAX_HEIGHT = 760;
+  const TOP_SHADOW = 16;
+  const SETTLE_MS = 300;
+
+  let stack: HTMLElement | undefined = $state();
+  let popup: HTMLElement | undefined = $state();
+  let windowHeight = MAX_HEIGHT;
+  let shown = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function requiredHeight() {
+    if (!stack) return MAX_HEIGHT;
+    let top = stack.getBoundingClientRect().top;
+    if (popup) top = Math.min(top, popup.getBoundingClientRect().top);
+    return Math.ceil(window.innerHeight - top + TOP_SHADOW);
+  }
+
+  function grow() {
+    if (windowHeight >= MAX_HEIGHT) return;
+    windowHeight = MAX_HEIGHT;
+    void fitWindow(MAX_HEIGHT);
+  }
+
+  function settleSoon() {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      windowHeight = Math.min(MAX_HEIGHT, requiredHeight());
+      const firstShow = !shown;
+      shown = true;
+      void fitWindow(windowHeight, firstShow).then(() => {
+        // Часть систем при первом показе сбрасывает размер или сдвигает окно — возвращаем.
+        if (firstShow) setTimeout(() => void restoreWindow(), 250);
+      });
+    }, SETTLE_MS);
+  }
+
+  // Любое раскрытие/скрытие или изменение списков — подготовить место и пересчитать.
+  $effect(() => {
+    void [
+      app.panel,
+      app.profileMenuOpen,
+      app.party.inParty,
+      app.party.expanded,
+      app.party.members.length,
+      app.friends.requests.length,
+      app.friends.notice,
+    ];
+    grow();
+    settleSoon();
   });
 
-  function onConfigChange(next: Config) {
-    config = next;
-    applyTheme(next.theme);
+  onMount(() => {
+    void app.init();
+    const observer = new ResizeObserver(() => {
+      if (requiredHeight() > windowHeight) grow();
+      settleSoon();
+    });
+    if (stack) observer.observe(stack);
+    return () => observer.disconnect();
+  });
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      app.closePanels();
+      // Как в дизайне: после закрытия не оставляем рамку фокуса на кнопке.
+      (document.activeElement as HTMLElement | null)?.blur();
+    }
   }
 </script>
 
-<div class="layout">
-  <Sidebar bind:page version={info?.version ?? ""} />
+<svelte:window onkeydown={onKeydown} />
 
-  <main>
-    {#if error}
-      <p class="error">Не удалось загрузить настройки: {error}</p>
-    {:else if !config || !info}
-      <p class="dim">Загрузка…</p>
-    {:else if page === "play"}
-      <PlayPage {config} onChange={onConfigChange} />
-    {:else if page === "content"}
-      <ContentPage />
-    {:else if page === "friends"}
-      <FriendsPage />
-    {:else}
-      <SettingsPage {config} {info} onChange={onConfigChange} />
+<div class="root">
+  <div class="stack" bind:this={stack}>
+    {#if app.error}
+      <div class="card error">Не удалось загрузить настройки: {app.error}</div>
     {/if}
-  </main>
+
+    {#if app.config}
+      <Reveal open={app.party.inParty} bleed>
+        <PartyPanel party={app.party} />
+      </Reveal>
+
+      <Reveal open={app.panel === "friends"} bleed>
+        <FriendsPanel friends={app.friends} onClose={() => app.closePanels()} />
+      </Reveal>
+
+      <Reveal open={app.panel === "settings"} bleed>
+        <SettingsPanel {app} onClose={() => app.closePanels()} />
+      </Reveal>
+    {/if}
+
+    <MainBar {app} bind:popup />
+  </div>
 </div>
 
 <style>
-  .layout {
-    display: grid;
-    grid-template-columns: 200px 1fr;
+  .root {
     height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
 
-  main {
-    overflow-y: auto;
-    padding: 28px 32px;
+  /* Поля — место под тени карточек. */
+  .stack {
+    margin: 0 16px 22px;
   }
 
   .error {
-    color: var(--danger);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    color: var(--red);
   }
 </style>

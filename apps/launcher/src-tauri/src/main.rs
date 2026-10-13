@@ -3,6 +3,7 @@
 
 mod commands;
 mod state;
+mod window;
 
 use cuber_core::{logging, Config, Paths};
 
@@ -35,11 +36,28 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::new(paths, config))
+        .setup(|app| {
+            // Окно создаётся скрытым: ставим его на место, а показывает его
+            // интерфейс, когда подгонит высоту под содержимое — без мигания.
+            if let Some(main) = window::main_window(app.handle()) {
+                if let Err(err) = window::place_initially(&main, window::MAX_HEIGHT) {
+                    tracing::warn!(%err, "не удалось расположить окно");
+                }
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Moved(position) = event {
+                window::on_moved(window, *position);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::get_config,
             commands::save_config,
             commands::open_data_dir,
+            commands::fit_window,
+            commands::restore_window,
         ])
         .run(tauri::generate_context!())
         .expect("ошибка при запуске окна Cuber");
