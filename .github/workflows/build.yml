@@ -1,0 +1,48 @@
+name: Сборка для Windows
+
+# Готовый лаунчер для проверки: установщик и переносной .exe.
+# Скачать — во вкладке Actions → нужный запуск → Artifacts.
+
+on:
+  push:
+    branches: ["stage-*", main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-windows
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/launcher/package-lock.json
+      - name: Зависимости интерфейса
+        working-directory: apps/launcher
+        run: npm ci
+      - name: Сборка (релиз + установщик)
+        working-directory: apps/launcher
+        run: npx tauri build --bundles nsis
+      - name: Собрать файлы
+        shell: bash
+        run: |
+          mkdir -p dist-win
+          cp target/release/bundle/nsis/*.exe dist-win/
+          cp target/release/cuber-launcher.exe "dist-win/Cuber-portable.exe"
+          ls -la dist-win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cuber-Windows
+          path: dist-win/
+          retention-days: 30
