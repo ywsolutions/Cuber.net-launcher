@@ -1,0 +1,18 @@
+[package]
+name = "cuber-launcher"
+description = "Cuber.net — лёгкий лаунчер Minecraft Java Edition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+cuber-core.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
