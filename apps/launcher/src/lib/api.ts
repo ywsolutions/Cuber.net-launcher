@@ -14,6 +14,7 @@ export interface Config {
   after_launch: AfterLaunch;
   default_memory_mb: number;
   last_nickname: string | null;
+  onboarded: boolean;
 }
 
 export interface AppInfo {
@@ -29,6 +30,7 @@ let mockConfig: Config = {
   after_launch: "minimize",
   default_memory_mb: 6144,
   last_nickname: null,
+  onboarded: false,
 };
 
 export async function appInfo(): Promise<AppInfo> {
@@ -121,3 +123,9 @@ export function closeWindow() {
 export function startDragging() {
   if (inTauri) void getCurrentWindow().startDragging();
 }
+
+// ── Самопроверка интерфейса (CI) ────────────────────────────────────
+
+export const selftestEnabled = () =>
+  inTauri ? invoke<boolean>("selftest_enabled") : Promise.resolve(false);
+export const selftestLog = (step: string) => invoke<void>("selftest_log", { step });

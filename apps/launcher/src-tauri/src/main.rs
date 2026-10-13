@@ -67,6 +67,8 @@ fn main() {
             commands::open_data_dir,
             commands::fit_window,
             commands::restore_window,
+            commands::selftest_enabled,
+            commands::selftest_log,
             game::list_profiles,
             game::create_profile,
             game::list_versions,

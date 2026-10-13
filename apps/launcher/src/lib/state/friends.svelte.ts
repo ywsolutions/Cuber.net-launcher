@@ -68,7 +68,12 @@ export class FriendsState {
       this.showNotice(`${name} уже в друзьях`);
       return;
     }
-    await this.service.sendFriendRequest(name);
+    try {
+      await this.service.sendFriendRequest(name);
+    } catch (e) {
+      this.showNotice(e instanceof Error ? e.message : String(e));
+      return;
+    }
     this.newName = "";
     this.showNotice(`Заявка отправлена: ${name}`);
   }

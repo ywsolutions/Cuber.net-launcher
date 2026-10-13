@@ -46,6 +46,8 @@ pub struct Config {
     pub default_memory_mb: u32,
     /// Последний введённый ник для офлайн-игры.
     pub last_nickname: Option<String>,
+    /// Пройдено ли приветствие при первом запуске.
+    pub onboarded: bool,
 }
 
 impl Default for Config {
@@ -55,6 +57,7 @@ impl Default for Config {
             after_launch: AfterLaunch::default(),
             default_memory_mb: 4096,
             last_nickname: None,
+            onboarded: false,
         }
     }
 }
@@ -137,6 +140,7 @@ mod tests {
             after_launch: AfterLaunch::Close,
             default_memory_mb: 6144,
             last_nickname: Some("SYGEN".into()),
+            onboarded: true,
         };
         config.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), config);

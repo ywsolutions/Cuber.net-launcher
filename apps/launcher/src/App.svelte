@@ -5,6 +5,8 @@
   import MainBar from "./lib/panels/MainBar.svelte";
   import PartyPanel from "./lib/panels/PartyPanel.svelte";
   import SettingsPanel from "./lib/panels/SettingsPanel.svelte";
+  import Welcome from "./lib/panels/Welcome.svelte";
+  import { runSelftest } from "./lib/selftest";
   import { LauncherState } from "./lib/state/launcher.svelte";
   import Icon from "./lib/ui/Icon.svelte";
   import Reveal from "./lib/ui/Reveal.svelte";
@@ -62,13 +64,14 @@
       app.friends.requests.length,
       app.friends.notice,
       app.launchError,
+      app.config?.onboarded,
     ];
     grow();
     settleSoon();
   });
 
   onMount(() => {
-    void app.init();
+    void app.init().then(() => runSelftest(app));
     const observer = new ResizeObserver(() => {
       if (requiredHeight() > windowHeight) grow();
       settleSoon();
@@ -94,7 +97,9 @@
       <div class="card error">Не удалось загрузить настройки: {app.error}</div>
     {/if}
 
-    {#if app.config}
+    {#if app.config && !app.config.onboarded}
+      <Welcome {app} />
+    {:else if app.config}
       <Reveal open={app.party.inParty} bleed>
         <PartyPanel party={app.party} />
       </Reveal>
@@ -116,9 +121,9 @@
           </button>
         </div>
       </Reveal>
-    {/if}
 
-    <MainBar {app} bind:popup />
+      <MainBar {app} bind:popup />
+    {/if}
   </div>
 </div>
 

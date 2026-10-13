@@ -79,8 +79,9 @@ export class LauncherState {
       this.error = String(e);
       return;
     }
-    // Первый запуск: сразу готовим профиль с последней версией, чтобы можно было играть.
-    if (this.profiles.length === 0) {
+    // Нет ни одного профиля после приветствия (например, не было сети) —
+    // пробуем создать профиль с последней версией.
+    if (this.config?.onboarded && this.profiles.length === 0) {
       try {
         const { latest } = await this.services.profiles.versions();
         await this.createProfile(`Minecraft ${latest}`, latest);
@@ -88,6 +89,15 @@ export class LauncherState {
         // Нет сети — пользователь создаст профиль сам, когда она появится.
       }
     }
+  }
+
+  /** Завершить приветствие: сохранить ник и создать первый профиль. */
+  async completeOnboarding(nickname: string, version: string | null) {
+    if (version && this.profiles.length === 0) {
+      await this.createProfile(`Minecraft ${version}`, version);
+    }
+    await this.updateConfig({ last_nickname: nickname, onboarded: true });
+    this.party.renameLocal(nickname);
   }
 
   async createProfile(name: string, version: string) {
