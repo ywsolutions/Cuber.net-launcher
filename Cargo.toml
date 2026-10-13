@@ -11,6 +11,7 @@ rust-version = "1.80"
 
 [workspace.dependencies]
 cuber-core = { path = "crates/cuber-core" }
+cuber-launch = { path = "crates/cuber-launch" }
 
 anyhow = "1"
 directories = "6"
@@ -22,6 +23,19 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tempfile = "3"
+
+# Сеть и загрузки. TLS — rustls с провайдером ring: без C-зависимостей,
+# собирается на Windows без дополнительных инструментов. Сертификаты — из ОС.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "json", "stream", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time", "process"] }
+futures = "0.3"
+sha1 = "0.10"
+hex = "0.4"
+md-5 = "0.10"
+uuid = { version = "1", features = ["v3", "serde"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+clap = { version = "4", features = ["derive"] }
 
 [profile.release]
 # Лаунчер должен быть маленьким и быстрым.

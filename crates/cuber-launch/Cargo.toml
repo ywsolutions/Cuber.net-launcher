@@ -1,0 +1,28 @@
+[package]
+name = "cuber-launch"
+description = "Установка и запуск Minecraft Java Edition: версии, библиотеки, ассеты, Java, профили"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cuber-core.workspace = true
+futures.workspace = true
+hex.workspace = true
+md5 = { package = "md-5", version = "0.10" }
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
