@@ -8,7 +8,13 @@
 //!
 //! Геометрию храним сами: у скрытого окна некоторые системы (GTK на Linux)
 //! сообщают нулевой размер и позицию.
+//!
+//! Важно: блокировка геометрии никогда не держится во время вызовов окна.
+//! На Windows `set_position` синхронно присылает событие перемещения, и его
+//! обработчик ([`on_moved`]) выполняется в том же потоке — держи мы блокировку,
+//! поток ждал бы сам себя и лаунчер зависал.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -31,33 +37,55 @@ struct Geometry {
 
 static GEOMETRY: Mutex<Option<Geometry>> = Mutex::new(None);
 
+/// Идёт наше собственное перемещение — события о нём не считаем пользовательскими.
+static APPLYING: AtomicBool = AtomicBool::new(false);
+
 /// Когда окно впервые показано. Сразу после показа оконный менеджер может
 /// сам сдвинуть окно — такие перемещения не считаем пользовательскими.
 static SHOWN_AT: Mutex<Option<Instant>> = Mutex::new(None);
 const SETTLE_AFTER_SHOW: Duration = Duration::from_millis(1000);
+
+fn geometry() -> Option<Geometry> {
+    *GEOMETRY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn set_geometry(g: Geometry) {
+    *GEOMETRY.lock().unwrap_or_else(|e| e.into_inner()) = Some(g);
+}
 
 /// Отметить первый показ окна.
 pub fn mark_shown() {
     *SHOWN_AT.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
 }
 
-/// Окно перемещено (пользователь перетащил его). Запоминаем новое место,
-/// чтобы дальше расти и уменьшаться от него.
+/// Окно перемещено. Если это сделал пользователь (перетащил окно) —
+/// запоминаем новое место, чтобы дальше расти и уменьшаться от него.
 pub fn on_moved(window: &tauri::Window, position: PhysicalPosition<i32>) {
+    if APPLYING.load(Ordering::SeqCst) {
+        return;
+    }
     let settled = SHOWN_AT
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .try_lock()
+        .ok()
+        .and_then(|t| *t)
         .is_some_and(|t| t.elapsed() >= SETTLE_AFTER_SHOW);
     if !settled {
+        return;
+    }
+    // Свёрнутое окно Windows уводит в (-32000, -32000) — это не новое место.
+    if window.is_minimized().unwrap_or(false) || position.x <= -10_000 || position.y <= -10_000 {
         return;
     }
     let Ok(scale) = window.scale_factor() else {
         return;
     };
     let pos = position.to_logical::<f64>(scale);
-    if let Some(g) = GEOMETRY.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-        g.x = pos.x;
-        g.bottom = pos.y + g.height;
+    // try_lock: если геометрию сейчас меняют — пропускаем событие, но не ждём.
+    if let Ok(mut guard) = GEOMETRY.try_lock() {
+        if let Some(g) = guard.as_mut() {
+            g.x = pos.x;
+            g.bottom = pos.y + g.height;
+        }
     }
 }
 
@@ -79,41 +107,36 @@ pub fn place_initially(window: &WebviewWindow, height: f64) -> tauri::Result<()>
     let width = area.size.width as f64 / scale;
     let area_height = area.size.height as f64 / scale;
 
-    let geometry = Geometry {
+    let g = Geometry {
         x: (left + (width - WIDTH) / 2.0).round(),
         bottom: (top + area_height)
             .min((top + MAX_HEIGHT).max(top + area_height * 0.7))
             .round(),
         height: height.clamp(MIN_HEIGHT, MAX_HEIGHT).round(),
     };
-    apply(window, geometry, true)?;
-    *GEOMETRY.lock().unwrap_or_else(|e| e.into_inner()) = Some(geometry);
-    Ok(())
+    set_geometry(g);
+    apply(window, g, true)
 }
 
 /// Меняет высоту окна, сохраняя положение нижнего края.
 pub fn fit_height(window: &WebviewWindow, height: f64) -> tauri::Result<()> {
     let height = height.clamp(MIN_HEIGHT, MAX_HEIGHT).round();
-    let mut guard = GEOMETRY.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(mut geometry) = *guard else {
-        drop(guard);
+    let Some(mut g) = geometry() else {
         return place_initially(window, height);
     };
-
-    let growing = height > geometry.height;
-    let changed = (height - geometry.height).abs() >= 1.0;
-    geometry.height = height;
-    if changed {
-        apply(window, geometry, growing)?;
+    if (height - g.height).abs() < 1.0 {
+        return Ok(());
     }
-    *guard = Some(geometry);
-    Ok(())
+    let growing = height > g.height;
+    g.height = height;
+    // Сначала запоминаем, потом двигаем окно — без удержания блокировки.
+    set_geometry(g);
+    apply(window, g, growing)
 }
 
-/// Ещё раз выставляет запомненную позицию (после показа окна оконный менеджер мог её сдвинуть).
+/// Ещё раз выставляет запомненные размер и позицию.
 pub fn reapply(window: &WebviewWindow) -> tauri::Result<()> {
-    let geometry = *GEOMETRY.lock().unwrap_or_else(|e| e.into_inner());
-    match geometry {
+    match geometry() {
         Some(g) => apply(window, g, true),
         None => Ok(()),
     }
@@ -125,22 +148,27 @@ fn apply(window: &WebviewWindow, g: Geometry, move_first: bool) -> tauri::Result
     let position = LogicalPosition::new(g.x, g.bottom - g.height);
     let size = LogicalSize::new(WIDTH, g.height);
 
-    if cfg!(target_os = "linux") {
-        // GTK у нерастягиваемого окна жёстко фиксирует размер и игнорирует set_size.
-        // Поэтому на Linux окно формально растягиваемое, но минимальный и максимальный
-        // размер всегда равны текущему — пользователь его не изменит.
-        window.set_resizable(true)?;
-        window.set_min_size(Some(size))?;
-        window.set_max_size(Some(size))?;
-    }
-    if move_first {
-        window.set_position(position)?;
-        window.set_size(size)?;
-    } else {
-        window.set_size(size)?;
-        window.set_position(position)?;
-    }
-    Ok(())
+    APPLYING.store(true, Ordering::SeqCst);
+    let result = (|| {
+        if cfg!(target_os = "linux") {
+            // GTK у нерастягиваемого окна жёстко фиксирует размер и игнорирует set_size.
+            // Поэтому на Linux окно формально растягиваемое, но минимальный и максимальный
+            // размер всегда равны текущему — пользователь его не изменит.
+            window.set_resizable(true)?;
+            window.set_min_size(Some(size))?;
+            window.set_max_size(Some(size))?;
+        }
+        if move_first {
+            window.set_position(position)?;
+            window.set_size(size)?;
+        } else {
+            window.set_size(size)?;
+            window.set_position(position)?;
+        }
+        Ok(())
+    })();
+    APPLYING.store(false, Ordering::SeqCst);
+    result
 }
 
 /// Главное окно приложения.

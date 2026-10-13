@@ -42,13 +42,23 @@ export interface FriendsService {
 
 export interface ProfileService {
   profiles(): Promise<GameProfile[]>;
+  create(name: string, version: string): Promise<GameProfile>;
+  /** Версии Minecraft (только релизы, если не просят снапшоты). */
+  versions(snapshots?: boolean): Promise<{ latest: string; versions: string[] }>;
+  openFolder(profile: GameProfile): Promise<void>;
+}
+
+export interface LaunchProgress {
+  /** 0..1 */
+  fraction: number;
+  /** Короткий текст для кнопки: «Загрузка 45%». */
+  label: string;
 }
 
 export interface GameLauncher {
-  /** Готовит сборку и запускает игру. Прогресс — от 0 до 1. */
-  launch(
-    profile: GameProfile,
-    memoryGb: number,
-    onProgress: (progress: number) => void,
-  ): Promise<void>;
+  /** Готовит сборку (докачивает недостающее) и запускает игру.
+   *  Завершается, когда процесс игры стартовал. */
+  launch(profile: GameProfile, onProgress: (p: LaunchProgress) => void): Promise<void>;
+  /** Игра профиля закрылась. */
+  onExit(handler: (profileId: string, crashed: boolean) => void): Unsubscribe;
 }

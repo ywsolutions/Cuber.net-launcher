@@ -1,0 +1,21 @@
+[package]
+name = "cuber-cli"
+description = "Консольная утилита Cuber.net: установка и запуск Minecraft без интерфейса (для проверки и отладки)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "cuber-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+cuber-core.workspace = true
+cuber-launch.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

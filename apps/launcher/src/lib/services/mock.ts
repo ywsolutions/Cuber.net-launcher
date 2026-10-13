@@ -37,19 +37,41 @@ const FRIENDS: Friend[] = [
 ];
 
 export class MockProfileService implements ProfileService {
+  private list = PROFILES.map((p) => ({ ...p }));
+
   async profiles() {
-    return PROFILES.map((p) => ({ ...p }));
+    return this.list.map((p) => ({ ...p }));
   }
+
+  async create(name: string, version: string) {
+    const p = { id: `p-${Date.now()}`, name, version, loader: "Vanilla" };
+    this.list.unshift(p);
+    return { ...p };
+  }
+
+  async versions() {
+    return { latest: "1.21.1", versions: ["1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.18.2", "1.16.5", "1.12.2", "1.8.9", "1.7.10"] };
+  }
+
+  async openFolder() {}
 }
 
-/** Имитирует подготовку сборки и запуск (~3 секунды). */
+/** Имитирует подготовку сборки и запуск (~3 секунды), игра «закрывается» через 5 с. */
 export class MockGameLauncher implements GameLauncher {
-  async launch(_profile: GameProfile, _memoryGb: number, onProgress: (p: number) => void) {
+  private exitHandlers = new Set<(id: string, crashed: boolean) => void>();
+
+  async launch(profile: GameProfile, onProgress: (p: { fraction: number; label: string }) => void) {
     const steps = 80;
     for (let i = 1; i <= steps; i++) {
       await sleep(40);
-      onProgress(i / steps);
+      onProgress({ fraction: i / steps, label: `Загрузка ${Math.floor((i / steps) * 100)}%` });
     }
+    setTimeout(() => this.exitHandlers.forEach((h) => h(profile.id, false)), 5000);
+  }
+
+  onExit(handler: (id: string, crashed: boolean) => void) {
+    this.exitHandlers.add(handler);
+    return () => this.exitHandlers.delete(handler);
   }
 }
 

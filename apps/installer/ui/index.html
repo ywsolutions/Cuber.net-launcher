@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Установка Cuber</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="card" id="card">
+      <header class="top" id="drag">
+        <div class="brand">
+          <svg width="20" height="20" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 6 56 19 32 32 8 19z" fill="#7ad687" />
+            <path d="M8 19 32 32v26L8 45z" fill="#3fa34d" />
+            <path d="M56 19 32 32v26l24-13z" fill="#2b7a37" />
+          </svg>
+          <span>Cuber</span>
+          <span class="ver" id="ver"></span>
+        </div>
+        <div class="win">
+          <button class="icon-btn" id="min" title="Свернуть">
+            <svg width="10" height="10" viewBox="0 0 24 24"><path d="M5 12h14" /></svg>
+          </button>
+          <button class="icon-btn" id="close" title="Закрыть">
+            <svg width="10" height="10" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Установка / обновление -->
+      <section id="s-install" hidden>
+        <div class="hero">
+          <svg class="cube" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 6 56 19 32 32 8 19z" fill="#7ad687" />
+            <path d="M8 19 32 32v26L8 45z" fill="#3fa34d" />
+            <path d="M56 19 32 32v26l24-13z" fill="#2b7a37" />
+          </svg>
+          <div>
+            <h1 id="i-title">Установка Cuber</h1>
+            <p class="lead" id="i-lead">Лёгкий лаунчер Minecraft с друзьями и совместной игрой.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="label">Папка</div>
+          <div class="path-row">
+            <div class="path" id="dir"></div>
+            <button class="ghost" id="change">Изменить</button>
+          </div>
+        </div>
+
+        <button class="switch" id="desktop" role="switch" aria-checked="true">
+          <span>Ярлык на рабочем столе</span>
+          <span class="track on"><span class="knob"></span></span>
+        </button>
+
+        <div class="error" id="i-error" hidden></div>
+        <button class="primary" id="install">Установить</button>
+        <div class="note">Права администратора не нужны · около 15 МБ</div>
+      </section>
+
+      <!-- Ход установки -->
+      <section id="s-progress" hidden>
+        <div class="center">
+          <svg class="cube spin" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 6 56 19 32 32 8 19z" fill="#7ad687" />
+            <path d="M8 19 32 32v26L8 45z" fill="#3fa34d" />
+            <path d="M56 19 32 32v26l24-13z" fill="#2b7a37" />
+          </svg>
+          <h1 id="p-title">Устанавливаю…</h1>
+          <div class="bar"><span id="bar"></span></div>
+          <p class="lead" id="p-step">Копирую файлы</p>
+        </div>
+      </section>
+
+      <!-- Готово -->
+      <section id="s-done" hidden>
+        <div class="center">
+          <div class="check">
+            <svg width="30" height="30" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
+          </div>
+          <h1 id="d-title">Cuber установлен</h1>
+          <p class="lead" id="d-lead">Ярлык есть в меню «Пуск».</p>
+        </div>
+        <button class="primary" id="run">Запустить Cuber</button>
+        <button class="ghost wide" id="finish">Готово</button>
+      </section>
+
+      <!-- Удаление -->
+      <section id="s-uninstall" hidden>
+        <div class="hero">
+          <svg class="cube dim" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 6 56 19 32 32 8 19z" fill="#7ad687" />
+            <path d="M8 19 32 32v26L8 45z" fill="#3fa34d" />
+            <path d="M56 19 32 32v26l24-13z" fill="#2b7a37" />
+          </svg>
+          <div>
+            <h1>Удалить Cuber?</h1>
+            <p class="lead">Лаунчер, ярлыки и запись в списке программ будут удалены.</p>
+          </div>
+        </div>
+
+        <button class="switch" id="wipe" role="switch" aria-checked="false">
+          <span>
+            Удалить также миры, профили и настройки
+            <small>Без этого всё останется и вернётся после переустановки</small>
+          </span>
+          <span class="track"><span class="knob"></span></span>
+        </button>
+
+        <div class="error" id="u-error" hidden></div>
+        <button class="danger" id="remove">Удалить</button>
+        <button class="ghost wide" id="keep">Отмена</button>
+      </section>
+
+      <!-- Не та система / нет начинки -->
+      <section id="s-unsupported" hidden>
+        <div class="center">
+          <h1>Установка недоступна</h1>
+          <p class="lead" id="u-reason"></p>
+        </div>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

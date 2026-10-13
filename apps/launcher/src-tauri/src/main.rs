@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod game;
 mod state;
 mod window;
 
@@ -32,10 +33,18 @@ fn main() {
     );
 
     let config = Config::load_or_recover(&paths.config_file());
+    let state = match AppState::new(paths, config) {
+        Ok(state) => state,
+        Err(err) => {
+            tracing::error!(%err, "не удалось подготовить загрузчик");
+            eprintln!("Cuber: {err}");
+            std::process::exit(1);
+        }
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new(paths, config))
+        .manage(state)
         .setup(|app| {
             // Окно создаётся скрытым: ставим его на место, а показывает его
             // интерфейс, когда подгонит высоту под содержимое — без мигания.
@@ -58,6 +67,13 @@ fn main() {
             commands::open_data_dir,
             commands::fit_window,
             commands::restore_window,
+            commands::selftest_enabled,
+            commands::selftest_log,
+            game::list_profiles,
+            game::create_profile,
+            game::list_versions,
+            game::open_profile_dir,
+            game::launch_profile,
         ])
         .run(tauri::generate_context!())
         .expect("ошибка при запуске окна Cuber");

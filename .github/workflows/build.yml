@@ -1,0 +1,150 @@
+name: Сборка для Windows
+
+# Собирает готовый Cuber для Windows и проверяет его на настоящей Windows:
+# - Cuber-Setup.exe — наш установщик (внутри — лаунчер);
+# - Cuber-portable.exe — лаунчер без установки.
+# Проверки: тихая установка/удаление, самопроверка интерфейса (окно не зависает,
+# растёт вверх, нижний край на месте). Итог — комментарием в PR.
+# Скачать сборку — во вкладке Actions → нужный запуск → Artifacts.
+
+on:
+  push:
+    branches: ["stage-*", main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-windows
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/launcher/package-lock.json
+
+      - name: Зависимости интерфейса
+        working-directory: apps/launcher
+        run: npm ci
+
+      - name: Сборка лаунчера
+        working-directory: apps/launcher
+        run: npx tauri build --no-bundle
+
+      - name: Сборка установщика (лаунчер внутри)
+        shell: bash
+        run: |
+          export CUBER_PAYLOAD="$PWD/target/release/cuber-launcher.exe"
+          cargo build -p cuber-setup --release --features custom-protocol
+
+      - name: Собрать файлы
+        shell: bash
+        run: |
+          mkdir -p dist-win
+          cp target/release/cuber-setup.exe dist-win/Cuber-Setup.exe
+          cp target/release/cuber-launcher.exe dist-win/Cuber-portable.exe
+          ls -la dist-win
+
+      - name: Проверка установки, интерфейса и удаления
+        id: check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $report = New-Object System.Collections.Generic.List[string]
+          $ok = $true
+          function Check($name, $cond) {
+            if ($cond) { $report.Add("✅ $name") } else { $report.Add("❌ $name"); $script:ok = $false }
+          }
+
+          # 1. Тихая установка
+          $dir = Join-Path $env:TEMP "CuberTest"
+          $p = Start-Process -FilePath "dist-win\Cuber-Setup.exe" -ArgumentList "--silent","--dir",$dir,"--desktop" -Wait -PassThru
+          Check "установщик завершился без ошибки (код $($p.ExitCode))" ($p.ExitCode -eq 0)
+          Check "Cuber.exe на месте" (Test-Path "$dir\Cuber.exe")
+          Check "деинсталлятор на месте" (Test-Path "$dir\Uninstall Cuber.exe")
+          $menu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Cuber.lnk"
+          Check "ярлык в меню «Пуск»" (Test-Path $menu)
+          $desk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Cuber.lnk"
+          Check "ярлык на рабочем столе" (Test-Path $desk)
+          $reg = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Cuber" -ErrorAction SilentlyContinue
+          Check "запись в «Приложения и возможности»" ($null -ne $reg -and $reg.DisplayName -eq "Cuber")
+
+          # 2. Самопроверка интерфейса установленного лаунчера
+          $home2 = Join-Path $env:TEMP "CuberHome"
+          New-Item -ItemType Directory -Force -Path $home2 | Out-Null
+          Set-Content -Path "$home2\config.toml" -Value "last_nickname = `"CuberTest`"`nonboarded = true`n" -Encoding utf8
+          $log = Join-Path $env:TEMP "selftest.log"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $env:CUBER_HOME = $home2
+          $env:CUBER_SELFTEST = $log
+          $app = Start-Process -FilePath "$dir\Cuber.exe" -PassThru
+          $hung = 0; $checks = 0
+          for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 1
+            $proc = Get-Process -Id $app.Id -ErrorAction SilentlyContinue
+            if (-not $proc) { break }
+            # Считаем с момента, когда интерфейс готов (в отчёте появилась строка start):
+            # первые секунды WebView2 на холодной машине CI ещё создаётся.
+            if (-not ((Test-Path $log) -and (Select-String -Path $log -Pattern "^start" -Quiet))) { continue }
+            $proc.Refresh(); $checks++
+            if (-not $proc.Responding) { $hung++; $report.Add("   (не отвечал на $i-й секунде)") }
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern "^DONE" -Quiet)) { break }
+          }
+          $alive = $null -ne (Get-Process -Id $app.Id -ErrorAction SilentlyContinue)
+          Check "лаунчер работал всю проверку" $alive
+          Check "окно ни разу не зависло ($hung из $checks проверок)" ($hung -eq 0 -and $checks -gt 5)
+          $lines = @(); if (Test-Path $log) { $lines = Get-Content $log }
+          Check "самопроверка дошла до конца" ($lines -match "^DONE").Count
+          # Нижний край окна не должен двигаться, а с панелями окно должно быть выше.
+          $bottoms = $lines | ForEach-Object { if ($_ -match "bottom=(-?\d+)") { [int]$Matches[1] } }
+          $heights = @{}
+          foreach ($l in $lines) { if ($l -match "^(\S+)\s.*h=(\d+)") { $heights[$Matches[1]] = [int]$Matches[2] } }
+          $spread = if ($bottoms) { ($bottoms | Measure-Object -Maximum -Minimum) } else { $null }
+          Check "нижний край на месте (разброс $($spread.Maximum - $spread.Minimum) px)" ($spread -and ($spread.Maximum - $spread.Minimum) -le 2)
+          Check "с «Друзьями» окно выше, чем без панелей" ($heights["1:friends"] -gt $heights["1:closed"])
+          Check "с «Настройками» окно выше, чем без панелей" ($heights["1:settings"] -gt $heights["1:closed"])
+          if ($alive) { Stop-Process -Id $app.Id -Force }
+          Remove-Item Env:CUBER_SELFTEST; Remove-Item Env:CUBER_HOME
+          Start-Sleep -Seconds 2
+
+          # 3. Тихое удаление
+          $u = Start-Process -FilePath "$dir\Uninstall Cuber.exe" -ArgumentList "--uninstall","--silent" -Wait -PassThru
+          Check "деинсталлятор завершился без ошибки (код $($u.ExitCode))" ($u.ExitCode -eq 0)
+          Start-Sleep -Seconds 6
+          Check "папка Cuber удалена" (-not (Test-Path $dir))
+          Check "ярлыки удалены" (-not (Test-Path $menu) -and -not (Test-Path $desk))
+          Check "запись в реестре удалена" (-not (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Cuber"))
+
+          $body = "### Сборка Windows — проверка`n`n" + ($report -join "`n") + "`n`n<details><summary>Размеры окна по шагам</summary>`n`n``````n" + (($lines | Select-Object -First 24) -join "`n") + "`n```````n</details>"
+          Set-Content -Path report.md -Value $body -Encoding utf8
+          $report | ForEach-Object { Write-Host $_ }
+          if (-not $ok) { exit 1 }
+
+      - name: Отчёт в PR
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f report.md ] || echo "### Сборка Windows: проверка не дошла до отчёта" > report.md
+          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file report.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cuber-Windows
+          path: dist-win/
+          retention-days: 30

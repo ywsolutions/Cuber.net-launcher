@@ -1,0 +1,29 @@
+[package]
+name = "cuber-setup"
+description = "Установщик Cuber.net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "cuber-setup"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+directories.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-dialog = "2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+mslnk = "0.1"
+
+[features]
+# Включается при релизной сборке: интерфейс берётся из бинарника, а не с dev-сервера.
+custom-protocol = ["tauri/custom-protocol"]
