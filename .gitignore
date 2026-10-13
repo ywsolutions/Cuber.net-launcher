@@ -1,0 +1,29 @@
+# Rust
+/target/
+**/target/
+
+# Node / UI
+node_modules/
+apps/launcher/dist/
+.svelte-kit/
+*.tsbuildinfo
+
+# Tauri
+apps/launcher/src-tauri/gen/schemas/
+
+# Секреты и локальные настройки — никогда не коммитить
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Локальные данные лаунчера при разработке
+/.cuber-dev/
+
+# Редакторы и ОС
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
